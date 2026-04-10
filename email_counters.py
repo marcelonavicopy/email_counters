@@ -16,6 +16,7 @@ OPT_TONER = True
 
 df1 = pd.DataFrame(
     columns=[
+        "Date",
         "MachineModel",
         "SerialNumber",
         "TotalCounter",
@@ -31,6 +32,7 @@ df1 = pd.DataFrame(
 if OPT_TONER:
     df2 = pd.DataFrame(
         columns=[
+            "Date",
             "MachineModel",
             "SerialNumber",
             "TotalCounter",
@@ -52,6 +54,7 @@ for msg in mailbox.fetch(AND(subject="COUNTER NOTIFICATION")):
             )
             for c in counters:
                 df1.loc[len(df1)] = [
+                    msg.date,
                     soup.MachineModel.string,
                     soup.SerialNumber.string,
                     soup.TotalCounter.string,
@@ -66,6 +69,7 @@ for msg in mailbox.fetch(AND(subject="COUNTER NOTIFICATION")):
                 toner_details = root.xpath("./TonerInformation/Details")
                 for d in toner_details:
                     df2.loc[len(df2)] = [
+                        msg.date,
                         soup.MachineModel.string,
                         soup.SerialNumber.string,
                         soup.TotalCounter.string,
