@@ -12,15 +12,16 @@ EMAIL_HOST = os.getenv("EMAIL_HOST")
 EMAIL_USER = os.getenv("EMAIL_USER")
 EMAIL_PSWD = os.getenv("EMAIL_PSWD")
 
-OPT_TONER = True
+OPT_TONER = False
+OPT_RAW_COUNTER = True
 
-df1 = pd.DataFrame(
+df_counter = pd.DataFrame(
     columns=[
         "Date",
         "MachineModel",
         "SerialNumber",
         "TotalCounter",
-        "Model",
+        "Mode",
         "Color",
         "Type",
         "Large",
@@ -30,7 +31,7 @@ df1 = pd.DataFrame(
 )
 
 if OPT_TONER:
-    df2 = pd.DataFrame(
+    df_toner = pd.DataFrame(
         columns=[
             "Date",
             "MachineModel",
@@ -53,7 +54,7 @@ for msg in mailbox.fetch(AND(subject="COUNTER NOTIFICATION")):
                 "./ChargeCounter/Counter",
             )
             for c in counters:
-                df1.loc[len(df1)] = [
+                df_counter.loc[len(df_counter)] = [
                     msg.date,
                     soup.MachineModel.string,
                     soup.SerialNumber.string,
@@ -68,7 +69,7 @@ for msg in mailbox.fetch(AND(subject="COUNTER NOTIFICATION")):
             if OPT_TONER:
                 toner_details = root.xpath("./TonerInformation/Details")
                 for d in toner_details:
-                    df2.loc[len(df2)] = [
+                    df_toner.loc[len(df_toner)] = [
                         msg.date,
                         soup.MachineModel.string,
                         soup.SerialNumber.string,
@@ -80,7 +81,59 @@ for msg in mailbox.fetch(AND(subject="COUNTER NOTIFICATION")):
 
 mailbox.logout()
 
+df_counter["Total"] = df_counter["Large"].fillna(0).astype(int) + df_counter[
+    "Small"
+].fillna(0).astype(int)
+
+scan_total = (
+    df_counter[df_counter["Mode"] == "SCAN"].groupby("SerialNumber")["Total"].sum()
+)
+df_counter["TotalScan"] = df_counter["SerialNumber"].map(scan_total).fillna(0)
+
+black_total = (
+    df_counter[(df_counter["Mode"] == "PRINT") & (df_counter["Color"] == "BLACK")]
+    .groupby("SerialNumber")["Total"]
+    .sum()
+)
+df_counter["TotalBlack"] = df_counter["SerialNumber"].map(black_total).fillna(0)
+
+color_total = (
+    df_counter[(df_counter["Mode"] == "PRINT") & (df_counter["Color"] == "FULL")]
+    .groupby("SerialNumber")["Total"]
+    .sum()
+)
+df_counter["TotalColor"] = df_counter["SerialNumber"].map(color_total).fillna(0)
+
+color_low_total = (
+    df_counter[
+        (df_counter["Mode"] == "PRINT") & (df_counter["Color"].isin(["TWIN", "LOW"]))
+    ]
+    .groupby("SerialNumber")["Total"]
+    .sum()
+)
+df_counter["TotalColorLow"] = df_counter["SerialNumber"].map(color_low_total).fillna(0)
+
+df_counter_odoo = df_counter[
+    ["SerialNumber", "Date", "TotalBlack", "TotalColor", "TotalColorLow", "TotalScan"]
+].copy()
+df_counter_odoo = df_counter_odoo.drop_duplicates()
+df_counter_odoo = df_counter_odoo.rename(
+    columns={
+        "SerialNumber": "numero_serie",
+        "Date": "fecha_lectura",
+        "TotalBlack": "contador_bn",
+        "TotalColor": "contador_color",
+        "TotalColorLow": "contador_color_baja",
+        "TotalScan": "contador_escaneo",
+    }
+)
+df_counter_odoo["fecha_lectura"] = pd.to_datetime(
+    df_counter_odoo["fecha_lectura"]
+).dt.strftime("%Y-%m-%d")
+
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-df1.to_csv(f"counter_{timestamp}.csv", index=False)
+df_counter_odoo.to_csv(f"counter_{timestamp}.csv", index=False)
+if OPT_RAW_COUNTER:
+    df_counter.to_csv(f"raw_counter_{timestamp}.csv", index=False)
 if OPT_TONER:
-    df2.to_csv(f"toner_{timestamp}.csv", index=False)
+    df_toner.to_csv(f"toner_{timestamp}.csv", index=False)
