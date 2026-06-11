@@ -127,8 +127,9 @@ df_counter_odoo = df_counter_odoo.rename(
         "TotalScan": "contador_escaneo",
     }
 )
+
 df_counter_odoo["fecha_lectura"] = pd.to_datetime(
-    df_counter_odoo["fecha_lectura"]
+    df_counter_odoo["fecha_lectura"], utc=True
 ).dt.strftime("%Y-%m-%d")
 
 timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
